@@ -9,8 +9,18 @@
 #include <Adafruit_BNO055.h>
 #include <utility/imumaths.h>
 
-
+// Max current draw: 2.5A @ ~11.5 supply voltage, peak power: 26.824 W
 Adafruit_INA219 ina219;
+
+float shuntvoltage = 0;
+float busvoltage = 0;
+float current_mA = 0;
+float loadvoltage = 0;
+float power_mW = 0;
+
+float maxCurrent_mA = 0;
+float maxPower_mW = 0;
+
 
 #define NUM_MOTORS 4
 DCMotorController* motors[NUM_MOTORS];
@@ -44,7 +54,7 @@ void setupMotors()
     for (size_t index = 0; index < NUM_MOTORS; index++)
     {
         motors[index]->setGearboxProperties(12, 150.58);
-        motors[index]->setPid(5.0, 0.5, 0.1);
+        motors[index]->setPid(5.0, 0.0, 0.1);
         motors[index]->setPointBounds(max_speed_rps, 20);
         motors[index]->updateDelay = 10000;
         // motors[index]->flipEncoder = true;
@@ -106,8 +116,9 @@ void setup()
 
     setupMotors();
 
-    ina219.begin();
-    ina219.setCalibration_16V_400mA();
+    ina219.begin();  // defaults to max range 32V, +/-3.2A
+    //ina219.setCalibration_32V_1A();
+    // ina219.setCalibration_16V_400mA();
 
     tilt_servo.attach(20);
 
@@ -135,6 +146,19 @@ void loop()
 {
     for (size_t index = 0; index < NUM_MOTORS; index++) {
         motors[index]->update();
+    }
+
+    shuntvoltage = ina219.getShuntVoltage_mV();
+    busvoltage = ina219.getBusVoltage_V();
+    current_mA = ina219.getCurrent_mA();
+    power_mW = ina219.getPower_mW();
+    loadvoltage = busvoltage + (shuntvoltage / 1000);
+
+    if (current_mA > maxCurrent_mA) {
+        maxCurrent_mA = current_mA;
+    }
+    if (power_mW > maxPower_mW) {
+        maxPower_mW = power_mW;
     }
 
     if (Serial.available()) {
@@ -179,46 +203,35 @@ void loop()
                 Serial.println((float)motors[index]->getPosition());
             }
 
-            float shuntvoltage = 0;
-            float busvoltage = 0;
-            float current_mA = 0;
-            float loadvoltage = 0;
-            float power_mW = 0;
-
-            shuntvoltage = ina219.getShuntVoltage_mV();
-            busvoltage = ina219.getBusVoltage_V();
-            current_mA = ina219.getCurrent_mA();
-            power_mW = ina219.getPower_mW();
-            loadvoltage = busvoltage + (shuntvoltage / 1000);
-
             Serial.print("Bus Voltage:   "); Serial.print(busvoltage); Serial.println(" V");
             Serial.print("Shunt Voltage: "); Serial.print(shuntvoltage); Serial.println(" mV");
             Serial.print("Load Voltage:  "); Serial.print(loadvoltage); Serial.println(" V");
             Serial.print("Current:       "); Serial.print(current_mA); Serial.println(" mA");
+            Serial.print("Peak Current:  "); Serial.print(maxCurrent_mA); Serial.println(" mA");
             Serial.print("Power:         "); Serial.print(power_mW); Serial.println(" mW");
-            Serial.println();
+            Serial.print("Peak Power:    "); Serial.print(maxPower_mW); Serial.println(" mW");
             Serial.println();
 
+            imu::Vector<3> euler = bno.getVector(Adafruit_BNO055::VECTOR_EULER);
+            Serial.print("X: ");
+            Serial.print(euler.x());
+            Serial.print(" Y: ");
+            Serial.print(euler.y());
+            Serial.print(" Z: ");
+            Serial.print(euler.z());
+            Serial.print("\t\t");
 
-            // imu::Vector<3> euler = bno.getVector(Adafruit_BNO055::VECTOR_EULER);
-            // Serial.print("X: ");
-            // Serial.print(euler.x());
-            // Serial.print(" Y: ");
-            // Serial.print(euler.y());
-            // Serial.print(" Z: ");
-            // Serial.print(euler.z());
-            // Serial.print("\t\t");
-            //
-            // uint8_t system, gyro, accel, mag = 0;
-            // bno.getCalibration(&system, &gyro, &accel, &mag);
-            // Serial.print("CALIBRATION: Sys=");
-            // Serial.print(system, DEC);
-            // Serial.print(" Gyro=");
-            // Serial.print(gyro, DEC);
-            // Serial.print(" Accel=");
-            // Serial.print(accel, DEC);
-            // Serial.print(" Mag=");
-            // Serial.println(mag, DEC);
+            uint8_t system, gyro, accel, mag = 0;
+            bno.getCalibration(&system, &gyro, &accel, &mag);
+            Serial.print("CALIBRATION: Sys=");
+            Serial.print(system, DEC);
+            Serial.print(" Gyro=");
+            Serial.print(gyro, DEC);
+            Serial.print(" Accel=");
+            Serial.print(accel, DEC);
+            Serial.print(" Mag=");
+            Serial.println(mag, DEC);
+            Serial.println();
         }
     }
 }
