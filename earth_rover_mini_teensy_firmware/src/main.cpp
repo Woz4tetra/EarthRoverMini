@@ -9,6 +9,9 @@
 #include <Adafruit_BNO055.h>
 #include <utility/imumaths.h>
 
+#define BUILTIN_LED_PIN 13
+bool builtin_led_state = false;
+
 // Max current draw: 2.5A @ ~11.5 supply voltage, peak power: 26.824 W
 Adafruit_INA219 ina219;
 
@@ -31,6 +34,12 @@ Servo tilt_servo;
 int servo_val = 0;
 
 Adafruit_BNO055 bno = Adafruit_BNO055();
+
+void set_builtin_led(bool state)
+{
+    builtin_led_state = state;
+    digitalWrite(BUILTIN_LED_PIN, builtin_led_state);
+}
 
 void setupMotors()
 {
@@ -112,6 +121,9 @@ void rotate(float speed)
 
 void setup()
 {
+    pinMode(BUILTIN_LED_PIN, OUTPUT);
+    set_builtin_led(HIGH);
+
     Serial.begin(115200);
 
     setupMotors();
@@ -163,6 +175,8 @@ void loop()
 
     if (Serial.available()) {
         String command = Serial.readStringUntil('\n');
+        set_builtin_led(!builtin_led_state);
+
         char c = command.charAt(0);
         if (c == '-' || ('0' <= c && c <= '9')) {
             driveForward(command.toFloat());
